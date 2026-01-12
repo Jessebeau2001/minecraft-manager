@@ -15,6 +15,7 @@ rich = "^14.2.0"
 
 [tool.poetry.scripts]
 mcm = "cli.main:app"
+test = "src.platform:run_test"
 
 
 [build-system]
