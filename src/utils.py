@@ -1,4 +1,6 @@
+from pathlib import Path
 import re
+from typing import Callable
 
 
 def sanitize_filename(name: str) -> str:
@@ -20,3 +22,15 @@ def sanitize_extension(extension: str | None) -> str:
         return extension
     else:
         return extension[1:]
+    
+
+def generate_unique_path(root: Path, name_generator: Callable[[], str], extension: str) -> Path:
+    base_name = name_generator()
+    extension = sanitize_extension(extension)
+
+    path = root.joinpath(f"{base_name}.{extension}")
+    index = 1
+    while path.exists():
+        path = root.joinpath(f"{base_name}-{index}.{extension}")
+        index += 1
+    return path

@@ -9,50 +9,21 @@ app.add_typer(cli.profile.app, name="profile")
 app.add_typer(cli.server.app, name="server")
 
 
-# @app.command()
-def hello(name: str):
-    print(f"Hello {name}")
+__version__ = "0.0.1"
 
 
-# @app.command()
-def goodbye(name: str, formal: bool = False):
-    """
-    Say goodbye to a certain person
-    """
-    if formal:
-        print(f"Goodbye Ms. {name}. Have a good day.")
-    else:
-        print(f"Bye {name}!")
+def version_callback(value: bool):
+    if value:
+        typer.echo(f"Minecraft CLI Manager version {__version__}")
+        raise typer.Exit()
 
 
-# @app.command()
-def greet(
-    name: Annotated[str, typer.Argument(help="The name of the person to greet")],
-    greeter: Annotated[str | None, typer.Option(help="The person who greets")] = None,
-    formal: Annotated[bool, typer.Option()] = False,
+@app.callback()
+def version(
+    version: Annotated[bool, typer.Option("--version", callback=version_callback, help="Show the current app version.")] = False
 ):
-    """
-    Greet someone
-    """
-    if formal:
-        if greeter != None:
-            print(f"{greeter} asks how you are doing {name}?")
-        else:
-            print(f"How are you doing {name}?")
-    else:
-        if greeter != None:
-            print(f"{greeter} says hey {name}")
-        else:
-            print(f"Hey {name}")
+    pass
+
 
 if __name__ == "__main__":
     app()
-
-# mcm servers list
-# mcm servers create (interactive)
-# mcm servers backup (--world)
-#
-#
-#
-#
-#

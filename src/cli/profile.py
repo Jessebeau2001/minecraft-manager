@@ -54,12 +54,11 @@ def prompt_unique_name(name: str | None) -> str:
     return name
 
 
-def prompt_server_dir(value: str | None) -> Path:
+def prompt_dir(name: str, value: str | None) -> Path:
     path: Path | None = None
-
     while path is None:
         if value is None or not value.strip():
-            value = str(typer.prompt("Please enter the server directory"))
+            value = str(typer.prompt(f"Please enter the {name}"))
 
         try:
             path = Path(value).expanduser()
@@ -77,11 +76,10 @@ def prompt_server_dir(value: str | None) -> Path:
             if not typer.confirm(f"The directory {path} does not exist. Use anyway?"):
                 value = None
                 path = None
-
     return path
 
 
-def simple_prompt(value: str | None, name: str) -> str:
+def prompt_str(name: str, value: str | None) -> str:
     if value == None:
         return str(typer.prompt(f"Enter the {name}"))
     return value
@@ -91,8 +89,8 @@ def simple_prompt(value: str | None, name: str) -> str:
 def create(
     name: Annotated[str | None, typer.Option(help="The name of the profile")] = None,
     server_dir: Annotated[str | None, typer.Option(help="The location of the server")] = None,
-    version: Annotated[str | None, typer.Option(help="The version of minecraft e.g. [1.20.4/fabric]")] = None,
-    backup_location: Annotated[str | None, typer.Option(help="The location to store server backups in")] = None,
+    mc_version: Annotated[str | None, typer.Option(help="The version of minecraft e.g. [1.20.4/fabric]")] = None,
+    backup_dir: Annotated[str | None, typer.Option(help="The location to store server backups in")] = None,
 ):
     """
     Create a new profile explicitly or interactively.
@@ -100,15 +98,15 @@ def create(
 
     # I dislike Typers implicit prompt system for this. Doing it manually gives us way more control
     name = prompt_unique_name(name)
-    server_path = prompt_server_dir(server_dir)
-    version = simple_prompt(version, "Minecraft version")
-    backup_location = simple_prompt(backup_location, "backup location")
+    server_path = prompt_dir("server directory", server_dir)
+    version = prompt_str("Minecraft version", mc_version)
+    backup_path = prompt_dir("backup directory", backup_dir)
 
     new_profile = Profile(
         name,
         str(server_path),
         version,
-        backup_location
+        str(backup_path)
     )
 
     console.print("Creating the following profile:")

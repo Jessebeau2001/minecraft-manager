@@ -1,8 +1,8 @@
 import tarfile
 import typer
-from typing import Annotated, Any, Callable, Iterator
+from typing import Annotated, Any, Iterator
 from config.profile import Profile, ProfileRepository, FileProfileRepository
-from utils import sanitize_extension, sanitize_filename
+from utils import generate_unique_path, sanitize_filename
 from pathlib import Path
 from datetime import datetime
 from click import ParamType
@@ -37,6 +37,7 @@ def backup(
     """
     Create a server backup based on the provided configuration.
     """
+
     backup_dir = Path(profile.backup_location)
     dir_to_backup = Path(profile.server_location)
     if world:
@@ -71,18 +72,6 @@ def generate_backup_name(name: str, isWorldOnly: bool) -> str:
     timestamp = now.strftime('%Y-%m-%d')
     flag = "[world]" if isWorldOnly else "[server]"
     return f"{name} {timestamp} {flag}"
-
-
-def generate_unique_path(root: Path, name_generator: Callable[[], str], extension: str) -> Path:
-    base_name = name_generator()
-    extension = sanitize_extension(extension)
-
-    path = root.joinpath(f"{base_name}.{extension}")
-    index = 1
-    while path.exists():
-        path = root.joinpath(f"{base_name}-{index}.{extension}")
-        index += 1
-    return path
 
 
 def iter_files(path: Path) -> Iterator[Path]:
