@@ -1,8 +1,9 @@
+import platform
+import shutil
 import time
 import subprocess
 from subprocess import CompletedProcess
 from abc import ABC, abstractmethod
-
 from utils import sanitize_filename
 
 
@@ -89,7 +90,25 @@ class LinuxScreenService(ScreenService):
         return super().exists(self._normalize_name(name))
 
 
-class ScreenPlatformService():
+class PlatformHostService(ABC):
+    @abstractmethod
+    def is_server_running(self, name: str) -> bool:
+        ...
+    
+    @abstractmethod
+    def start_server(self, name: str, workdir: str, entrypoint: str) -> bool:
+        ...
+    
+    @abstractmethod
+    def stop_server(self, name: str) -> bool:
+        ...
+    
+    @abstractmethod
+    def run_in_server(self, name: str, command: str):
+        ...
+
+
+class ScreenPlatformService(PlatformHostService):
     _prefix: str
     _screen: ScreenService
 
@@ -102,14 +121,14 @@ class ScreenPlatformService():
         return f"{self._prefix}-{base}"
     
 
-    def is_server_running(self, name: str):
+    def is_server_running(self, name: str) -> bool:
         local_name = self._local_name(name)
         return self._screen.exists(local_name)
 
 
-    def start_server(self, name: str, path: str, entrypoint: str) -> bool:
+    def start_server(self, name: str, workdir: str, entrypoint: str) -> bool:
         local_name = self._local_name(name)
-        cmd = f"cd {path} && {entrypoint}" # In the wrong layer, this should not know about linux vs other OS
+        cmd = f"cd {workdir} && {entrypoint}" # In the wrong layer, this should not know about linux vs other OS
         return self._screen.create(local_name, cmd)
     
     
@@ -126,3 +145,15 @@ class ScreenPlatformService():
 
 def run_test():
     ScreenPlatformService(LinuxScreenService())
+
+
+def createOSPlatformHostService() -> PlatformHostService:
+    system = platform.system()
+    match system:
+        case "Linux":
+            if shutil.which("screen"):
+                return ScreenPlatformService(LinuxScreenService())
+            else:
+                raise RuntimeError("System requirements not met, please install packages: [ screen ]")
+        case _:
+            raise RuntimeError(f"System {system} is not supported")

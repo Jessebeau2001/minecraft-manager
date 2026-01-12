@@ -7,11 +7,11 @@ from pathlib import Path
 from datetime import datetime
 from click import ParamType
 from rich.progress import track, Progress, SpinnerColumn, TextColumn
-from src.platform import ScreenPlatformService, LinuxScreenService
+from host_service import createOSPlatformHostService
 
 
-profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs")
-serverService = ScreenPlatformService(LinuxScreenService())
+profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs") # TODO: Move to central file
+serverService = createOSPlatformHostService() # TODO: Move to central file
 app = typer.Typer()
 
 

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 
-profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs")
+profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs") # TODO: Move to central file
 app = typer.Typer()
 console = Console()
 
