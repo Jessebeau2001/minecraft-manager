@@ -7,26 +7,76 @@ from pathlib import Path
 from datetime import datetime
 from click import ParamType
 from rich.progress import track, Progress, SpinnerColumn, TextColumn
+from src.platform import ScreenPlatformService, LinuxScreenService
 
 
-repo: ProfileRepository = FileProfileRepository("./tmp/configs")
+profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs")
+serverService = ScreenPlatformService(LinuxScreenService())
 app = typer.Typer()
 
 
-def typer_load_profile(name: str) -> Profile:
-    try:
-        return repo.load(name)
-    except Exception:
-        typer.echo(f"The server profile '{name}' does not exist")
-        raise typer.Abort()
-    
-    
 class ProfileParser(ParamType):
     name = "Profile"
 
     def convert(self, value: str, param: Any, ctx: Any):
-        return typer_load_profile(value)
+        name = value
+        try:
+            return profileRepository.load(name)
+        except Exception:
+            typer.echo(f"The server profile '{name}' does not exist")
+            raise typer.Abort()
 
+
+def require_running(name: str):
+    if not serverService.is_server_running(name):
+        raise typer.BadParameter(f"Server {name} is not running")
+
+@app.command()
+def start(
+    profile: Annotated[Profile, typer.Argument(help="The name of the profile.", click_type=ProfileParser())]
+):
+    """
+    Start the server specified in the profile.
+    """
+    name = profile.name
+    workdir = profile.server_location
+    entrypoint = profile.entrypoint
+
+    if serverService.is_server_running(name):
+        raise typer.BadParameter(f"Server {name} is already running")
+    
+    if serverService.start_server(name, workdir, entrypoint):
+        typer.echo(f"Started server {name}")
+    else:
+        typer.echo("Could not start server")
+
+@app.command()
+def exec(
+    profile: Annotated[Profile, typer.Argument(help="The name of the profile.", click_type=ProfileParser())],
+    command: Annotated[str, typer.Argument(help="The command to run in the server")],
+):
+    """
+    Try to execute the specified command in the server
+    """
+    name = profile.name
+    require_running(name)    
+    serverService.run_in_server(name, command)
+
+
+@app.command()
+def stop(
+    profile: Annotated[Profile, typer.Argument(help="The name of the profile.", click_type=ProfileParser())]
+):
+    """
+    Try to stop the specified server
+    """
+    name = profile.name
+    require_running(name)
+    typer.echo("Stopping server...")
+    if serverService.stop_server(name):
+        typer.echo(f"Stopped server {name}")
+    else:
+        typer.echo(f"Could not verify whether stop successful {name}")
 
 @app.command()
 def backup(
@@ -37,6 +87,9 @@ def backup(
     """
     Create a server backup based on the provided configuration.
     """
+
+    if serverService.is_server_running(profile.name):
+        raise typer.BadParameter("Cannot create backup of running server")
 
     backup_dir = Path(profile.backup_location)
     dir_to_backup = Path(profile.server_location)

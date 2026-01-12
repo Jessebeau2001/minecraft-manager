@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 
-repo: ProfileRepository = FileProfileRepository("./tmp/configs")
+profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs")
 app = typer.Typer()
 console = Console()
 
@@ -29,7 +29,7 @@ def profile_to_table(profile: Profile) -> Table:
 
 def typer_load_profile(name: str) -> Profile:
     try:
-        return repo.load(name)
+        return profileRepository.load(name)
     except Exception:
         typer.echo(f"The server profile '{name}' does not exist")
         raise typer.Abort()
@@ -46,7 +46,7 @@ def prompt_unique_name(name: str | None) -> str:
     if name == None:
         name = str(typer.prompt("Profile name"))
 
-    if repo.exists(name):
+    if profileRepository.exists(name):
         overwrite = typer.confirm(f"Profile with name {name} already exists, overwrite?")
         if not overwrite:
             raise typer.BadParameter(f"Profile with name '{name}' already exists.")
@@ -106,7 +106,8 @@ def create(
         name,
         str(server_path),
         version,
-        str(backup_path)
+        str(backup_path),
+        "java -jar server.jar"
     )
 
     console.print("Creating the following profile:")
@@ -116,7 +117,7 @@ def create(
     if not confirm:
         raise typer.Abort()
 
-    location = repo.save(new_profile.name, new_profile)
+    location = profileRepository.save(new_profile.name, new_profile)
     typer.echo(f"Saved new profile to {location}!")
 
 
@@ -128,7 +129,7 @@ def list(
     List all the profiles.
     """
 
-    list = repo.list()
+    list = profileRepository.list()
     typer.echo(f"Listing {len(list)} profiles:")
 
     if not verbose:
@@ -137,6 +138,6 @@ def list(
     else:
         for info in list:
             table = profile_to_table(info.profile)
-            console.print(f"* ({info.profile.name})/[{info.location}]:")
+            typer.echo(f"* {info.profile.name} [{info.location}]")
             console.print(table)
             

@@ -14,6 +14,7 @@ class Profile:
     server_location: str
     server_version: str
     backup_location: str
+    entrypoint: str
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -84,6 +85,11 @@ class FileProfileRepository:
         
 
     def load(self, name: str) -> Profile:
+        # TODO: This should search for the profile, not just load by name and call it a day
+        # Searching will entail:
+        # 1. Do any of the file names match our query
+        # 2. Does the name in the file also match the query - if yes return
+        # 3. else do an iterative search to check the name of every profile until found
         loaded = self._try_load(name)
         if loaded != None:
             return loaded

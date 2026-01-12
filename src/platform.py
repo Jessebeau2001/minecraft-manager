@@ -1,8 +1,9 @@
 import time
-import shlex
 import subprocess
 from subprocess import CompletedProcess
 from abc import ABC, abstractmethod
+
+from utils import sanitize_filename
 
 
 def run(cmd: list[str]) -> CompletedProcess[str]:
@@ -15,7 +16,7 @@ class ScreenService(ABC):
         ...
 
     @abstractmethod
-    def create(self, name: str, command: str | None = None) -> bool:
+    def create(self, name: str, command: str) -> bool:
         ...
 
     @abstractmethod
@@ -31,6 +32,10 @@ class ScreenService(ABC):
 
 
 class LinuxScreenService(ScreenService):
+    def _normalize_name(self, name: str) -> str:
+        # Just use the filename algo
+        return sanitize_filename(name)
+
     def list(self, trim_id: bool = False) -> list[str]:
         result = run(["screen", "-ls"])
         lines = result.stdout.splitlines()
@@ -56,20 +61,22 @@ class LinuxScreenService(ScreenService):
         return session_names
 
 
-    def create(self, name: str, command: str | None = None) -> bool:
-        args = ["screen", "-dmS", name]
-        if command != None:
-            args += shlex.split(command)
-        result = run(args)
+    def create(self, name: str, command: str) -> bool:
+        name = self._normalize_name(name)
+        args = ["screen", "-dmS", name, "bash", "-c", command]
+
+        result = run(args) # call subprocess
         return result.returncode == 0
 
 
     def stuff(self, name: str, command: str) -> bool:
+        name = self._normalize_name(name)
         result = run(["screen", "-S", name, "-X", "stuff", f"{command}\n"])
         return result.returncode == 0
 
 
     def wait_term(self, name: str, poll_interval: float = 0.5, timeout: float | None = None) -> bool:
+        name = self._normalize_name(name)
         start = time.monotonic()
         while True:
             if not self.exists(name):
@@ -77,6 +84,9 @@ class LinuxScreenService(ScreenService):
             if timeout is not None and time.monotonic() - start > timeout:
                 return False
             time.sleep(poll_interval)
+
+    def exists(self, name: str) -> bool:
+        return super().exists(self._normalize_name(name))
 
 
 class ScreenPlatformService():
@@ -97,18 +107,22 @@ class ScreenPlatformService():
         return self._screen.exists(local_name)
 
 
-    def start_server(self, name: str) -> bool:
+    def start_server(self, name: str, path: str, entrypoint: str) -> bool:
         local_name = self._local_name(name)
-        return self._screen.create(local_name, "sleep 10")
+        cmd = f"cd {path} && {entrypoint}" # In the wrong layer, this should not know about linux vs other OS
+        return self._screen.create(local_name, cmd)
     
     
     def stop_server(self, name: str) -> bool:
         local_name = self._local_name(name)
         self._screen.stuff(local_name, "stop")
-        return self._screen.wait_term(local_name)
+        return self._screen.wait_term(local_name, 1, 10)
+    
+
+    def run_in_server(self, name: str, command: str):
+        local_name = self._local_name(name)
+        self._screen.stuff(local_name, command)
 
 
 def run_test():
-    service = ScreenPlatformService(LinuxScreenService())
-
-    service.start_server("my")
+    ScreenPlatformService(LinuxScreenService())
