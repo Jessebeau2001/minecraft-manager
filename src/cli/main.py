@@ -2,8 +2,10 @@ from typing import Annotated
 import typer
 
 import cli.server
+import cli.profile
 
 app = typer.Typer()
+app.add_typer(cli.profile.app, name="profile")
 app.add_typer(cli.server.app, name="server")
 
 

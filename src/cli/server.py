@@ -1,94 +1,44 @@
-from datetime import datetime
-import re
 import tarfile
-from typing import Annotated, Any, Callable, Iterator
-from rich.progress import track, Progress, SpinnerColumn, TextColumn
 import typer
-
-from config.config import Config, ConfigRepository, FileConfigRepo
+from typing import Annotated, Any, Callable, Iterator
+from config.profile import Profile, ProfileRepository, FileProfileRepository
+from utils import sanitize_extension, sanitize_filename
 from pathlib import Path
+from datetime import datetime
+from click import ParamType
+from rich.progress import track, Progress, SpinnerColumn, TextColumn
 
 
-configs: ConfigRepository = FileConfigRepo("./tmp/configs")
+repo: ProfileRepository = FileProfileRepository("./tmp/configs")
 app = typer.Typer()
 
-def print_list_value(key: str, value: Any):
-    print(f"    - {key}: {value}")
 
-def print_list_item(key: str, value: Any):
-     print(f"- {key}: {value}")
-
-def print_config(config: Config):
-    print_list_item("name", config.name)
-    print_list_item("location", config.server_location)
-    print_list_item("version", config.server_version)
-
-
-@app.command()
-def create(
-    name: Annotated[str, typer.Option(help="The name of the profile", prompt=True)],
-    location: Annotated[str, typer.Option(help="The location of the server", prompt=True)] ,
-    version: Annotated[str, typer.Option(help="The version of minecraft e.g. [1.20.4/fabric]", prompt=True)],
-    backup_location: Annotated[str, typer.Option(help="The location to store server backups in", prompt=True)],
-):
-    # Can we eager this?
-    if configs.exists(name):
-        overwrite = typer.confirm(f"Profile with name {name} already exists, overwrite?")
-        if not overwrite:
-            raise typer.Abort()
-
-    config = Config(name, location, version, backup_location)
-    print_config(config)
-
-    confirm = typer.confirm("Is the profile ok?")
-    if not confirm:
+def typer_load_profile(name: str) -> Profile:
+    try:
+        return repo.load(name)
+    except Exception:
+        typer.echo(f"The server profile '{name}' does not exist")
         raise typer.Abort()
+    
+    
+class ProfileParser(ParamType):
+    name = "Profile"
 
-    configs.save(config.name, config)
-    print(f"Saved new profile {config.name}!")
-
-
-@app.command()
-def delete(item: str):
-    print(f"Selling item: {item}")
-
-@app.command()
-def list(
-    verbose: Annotated[bool, typer.Option(help="List the full server specification.")] = False,
-):
-    """List all server configs."""
-
-    list = configs.list()
-    print(f"Found {len(list)} server configs:")
-
-    if not verbose:
-        for info in list:
-            print(f"* {info.config.name} [{info.location}]")
-    else:
-        for info in list:
-            cfg = info.config
-            print(f"* ({cfg.name})/[{info.location}]:")
-            print_list_value("version", cfg.server_version)
-            print_list_value("location", cfg.server_location)
+    def convert(self, value: str, param: Any, ctx: Any):
+        return typer_load_profile(value)
 
 
 @app.command()
 def backup(
-    name: Annotated[str, typer.Argument(help="The config name.")],
-    progress: Annotated[bool, typer.Option(help="Show backup progress")] = False,
-    world: Annotated[bool, typer.Option(help="Only backup the servers world.")] = False
+    profile: Annotated[Profile, typer.Argument(help="The name of the profile.", click_type=ProfileParser())],
+    progress: Annotated[bool, typer.Option(help="Show backup progress.")] = False,
+    world: Annotated[bool, typer.Option(help="Only backup the server world.")] = False
 ):
-    """Create a server backup based to the provided config."""
-
-    config: Config # todo: this can be a typer task perhaps
-    try:
-        config = configs.load(name)
-    except Exception:
-        typer.echo(f"The server profile '{name}' does not exist")
-        raise typer.Abort()
-
-    backup_dir = Path(config.backup_location)
-    dir_to_backup = Path(config.server_location)
+    """
+    Create a server backup based on the provided configuration.
+    """
+    backup_dir = Path(profile.backup_location)
+    dir_to_backup = Path(profile.server_location)
     if world:
         dir_to_backup = dir_to_backup.joinpath("./world")
 
@@ -106,28 +56,17 @@ def backup(
 
     backup_file = generate_unique_path(
         backup_dir,
-        lambda: generate_backup_name(config.name, world),
+        lambda: generate_backup_name(profile.name, world),
         "tar.gz"
     )
 
     create_backup(dir_to_backup, backup_file, progress)
 
-    print(f"Successfully backed up '{config.name}' to {backup_file}")
-
-
-def sanitize_name(name: str) -> str:
-    illegals = r'[<>:"/\\|?*\s]+'
-    name = name.lower().strip(" ")     # lowercase & trim whitespace 
-    name = re.sub(illegals, "_", name) # collapse illegals chars into one underscore
-    return name
-
-
-def sanitize_extension(extension: str) -> str:
-    return extension if not extension.startswith(".") else extension[1:]
+    print(f"Successfully backed up '{profile.name}' to {backup_file}")
 
 
 def generate_backup_name(name: str, isWorldOnly: bool) -> str:
-    name = sanitize_name(name)
+    name = sanitize_filename(name)
     now = datetime.today()
     timestamp = now.strftime('%Y-%m-%d')
     flag = "[world]" if isWorldOnly else "[server]"
@@ -144,7 +83,6 @@ def generate_unique_path(root: Path, name_generator: Callable[[], str], extensio
         path = root.joinpath(f"{base_name}-{index}.{extension}")
         index += 1
     return path
-
 
 
 def iter_files(path: Path) -> Iterator[Path]:
@@ -171,7 +109,6 @@ def create_tar(root: Path, output: Path) -> Iterator[Path]:
             for file in iterator:
                 tar.add(file, arcname=file.name)
                 yield file
-
 
             
 def create_backup(
