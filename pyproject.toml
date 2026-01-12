@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "mc-manager"
+version = "0.1.0"
+description = "Tool for managing Minecraft servers"
+authors = ["Jessebeau2001 <jessgamen@gmail.com>"]
+packages = [{ include = "cli", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+typer = "^0.21.1"
+PyYAML = "^6.0.3"
+rich = "^14.2.0"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.scripts]
+mcm = "cli.main:app"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
