@@ -19,9 +19,9 @@ def sanitize_extension(extension: str | None) -> str:
         return ""
     
     if extension.startswith("."):
-        return extension
-    else:
         return extension[1:]
+    else:
+        return extension
     
 
 def generate_unique_path(root: Path, name_generator: Callable[[], str], extension: str) -> Path:
