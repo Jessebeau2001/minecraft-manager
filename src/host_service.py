@@ -124,45 +124,62 @@ class PlatformHostService(ABC):
 
 
 class ScreenPlatformService(PlatformHostService):
-    _prefix: str
-    _screen: ScreenService
+    __prefix: str
+    __screen: ScreenService
+
+    # TODO: When searching/listing screens sessions, make sure to only
+    # accept candidates with the local prefix
 
     def __init__(self, screen: ScreenService):
-        self._prefix = "mcm"
-        self._screen = screen
+        self.__prefix = "mcm"
+        self.__screen = screen
 
 
-    def _local_name(self, base: str) -> str:
-        return f"{self._prefix}-{base}"
+    def __to_local_name(self, base: str) -> str:
+        return f"{self.__prefix}-{base}"
+    
+
+    def __strip_local_name(self, base: str) -> str:
+        split = len(self.__prefix) + 1 # +1 for dash
+        return base[split:]
+    
+    
+    def __list_local_sessions(self) -> list[str]:
+        result: list[str] = []
+        for session in self.__screen.list():
+            name = self.__screen.trim_id(session)
+            if name.startswith(self.__prefix):
+                result.append(session)
+        return result
     
 
     def is_server_running(self, name: str) -> bool:
-        local_name = self._local_name(name)
-        return self._screen.exists(local_name)
+        local_name = self.__to_local_name(name)
+        return self.__screen.exists(local_name)
 
 
     def start_server(self, name: str, workdir: str, entrypoint: str) -> bool:
-        local_name = self._local_name(name)
+        local_name = self.__to_local_name(name)
         cmd = f"cd {workdir} && {entrypoint}" # In the wrong layer, this should not know about linux vs other OS
-        return self._screen.create(local_name, cmd)
+        return self.__screen.create(local_name, cmd)
     
     
     def stop_server(self, name: str) -> bool:
-        local_name = self._local_name(name)
-        self._screen.stuff(local_name, "stop")
-        return self._screen.wait_term(local_name, 1, 10)
+        local_name = self.__to_local_name(name)
+        self.__screen.stuff(local_name, "stop")
+        return self.__screen.wait_term(local_name, 1, 10)
     
     
     def list_running(self) -> list[HostDescriptor]:
         return [HostDescriptor(
-            self._screen.trim_id(session),
+            self.__strip_local_name(self.__screen.trim_id(session)),
             f"screen@{session}"
-        ) for session in self._screen.list()]
+        ) for session in self.__list_local_sessions()]
     
 
     def run_in_server(self, name: str, command: str):
-        local_name = self._local_name(name)
-        self._screen.stuff(local_name, command)
+        local_name = self.__to_local_name(name)
+        self.__screen.stuff(local_name, command)
 
 
 def run_test():

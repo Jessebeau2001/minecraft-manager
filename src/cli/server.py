@@ -78,7 +78,7 @@ def stop(
 
 
 @app.command()
-def active():
+def list():
     """
     List the running servers by name and host.
     """
