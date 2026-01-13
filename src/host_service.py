@@ -265,7 +265,7 @@ class PlatformHostService(ABC):
         ...
 
     @abstractmethod
-    def list_running(self) -> Result[list['HostDescriptor']]:
+    def list_running(self) -> Result[list[HostDescriptor]]:
         """
         Lists all running servers.
         
