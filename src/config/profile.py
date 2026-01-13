@@ -60,9 +60,10 @@ def generate_profile_filename(name: str) -> str:
 
 
 class FileProfileRepository:
-    def __init__(self, path: str):
+    def __init__(self, path: Path):
         self.storage_dir = Path(path)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        if not path.exists() or not path.is_dir():
+            raise RuntimeError(f"Path {path} is not a directory or does not exist")
 
 
     def _get_path_for(self, name: str) -> Path:

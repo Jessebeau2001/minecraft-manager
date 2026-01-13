@@ -1,17 +1,14 @@
-from pathlib import Path
-from typing import Annotated, Any
-from config.profile import FileProfileRepository, Profile, ProfileRepository
-
 import yaml
 import typer
+from pathlib import Path
+from typing import Annotated, Any
+from cli.config import profile_repository, console
 from click import ParamType
-from rich.console import Console
 from rich.table import Table
+from config.profile import Profile
 
 
-profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs") # TODO: Move to central file
 app = typer.Typer()
-console = Console()
 
 
 def profile_to_string(profile: Profile) -> str:
@@ -29,7 +26,7 @@ def profile_to_table(profile: Profile) -> Table:
 
 def typer_load_profile(name: str) -> Profile:
     try:
-        return profileRepository.load(name)
+        return profile_repository.load(name)
     except Exception:
         typer.echo(f"The server profile '{name}' does not exist")
         raise typer.Abort()
@@ -46,7 +43,7 @@ def prompt_unique_name(name: str | None) -> str:
     if name == None:
         name = str(typer.prompt("Profile name"))
 
-    if profileRepository.exists(name):
+    if profile_repository.exists(name):
         overwrite = typer.confirm(f"Profile with name {name} already exists, overwrite?")
         if not overwrite:
             raise typer.BadParameter(f"Profile with name '{name}' already exists.")
@@ -117,7 +114,7 @@ def create(
     if not confirm:
         raise typer.Abort()
 
-    location = profileRepository.save(new_profile.name, new_profile)
+    location = profile_repository.save(new_profile.name, new_profile)
     typer.echo(f"Saved new profile to {location}!")
 
 
@@ -129,7 +126,7 @@ def list(
     List all the profiles.
     """
 
-    list = profileRepository.list()
+    list = profile_repository.list()
     typer.echo(f"Listing {len(list)} profiles:")
 
     if not verbose:

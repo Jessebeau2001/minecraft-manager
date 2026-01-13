@@ -147,7 +147,7 @@ def run_test():
     ScreenPlatformService(LinuxScreenService())
 
 
-def createOSPlatformHostService() -> PlatformHostService:
+def create_os_host_service() -> PlatformHostService:
     system = platform.system()
     match system:
         case "Linux":

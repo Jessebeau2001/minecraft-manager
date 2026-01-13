@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mc-manager"
-version = "0.1.1"
+version = "0.0.1"
 description = "Tool for managing Minecraft servers"
 authors = ["Jessebeau2001 <jessgamen@gmail.com>"]
 packages = [{ include = "*", from = "src" }]

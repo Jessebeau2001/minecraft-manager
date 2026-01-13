@@ -1,15 +1,12 @@
-from typing import Annotated
 import typer
-
 import cli.server
 import cli.profile
+from typing import Annotated
+from cli.config import __version__
 
 app = typer.Typer()
 app.add_typer(cli.profile.app, name="profile")
 app.add_typer(cli.server.app, name="server")
-
-
-__version__ = "0.0.1"
 
 
 def version_callback(value: bool):

@@ -1,17 +1,15 @@
 import tarfile
 import typer
+from cli.config import profile_repository, server_service
 from typing import Annotated, Any, Iterator
-from config.profile import Profile, ProfileRepository, FileProfileRepository
+from config.profile import Profile
 from utils import generate_unique_path, sanitize_filename
 from pathlib import Path
 from datetime import datetime
 from click import ParamType
 from rich.progress import track, Progress, SpinnerColumn, TextColumn
-from host_service import createOSPlatformHostService
 
 
-profileRepository: ProfileRepository = FileProfileRepository("./tmp/configs") # TODO: Move to central file
-serverService = createOSPlatformHostService() # TODO: Move to central file
 app = typer.Typer()
 
 
@@ -21,14 +19,14 @@ class ProfileParser(ParamType):
     def convert(self, value: str, param: Any, ctx: Any):
         name = value
         try:
-            return profileRepository.load(name)
+            return profile_repository.load(name)
         except Exception:
             typer.echo(f"The server profile '{name}' does not exist")
             raise typer.Abort()
 
 
 def require_running(name: str):
-    if not serverService.is_server_running(name):
+    if not server_service.is_server_running(name):
         raise typer.BadParameter(f"Server {name} is not running")
 
 @app.command()
@@ -42,10 +40,10 @@ def start(
     workdir = profile.server_location
     entrypoint = profile.entrypoint
 
-    if serverService.is_server_running(name):
+    if server_service.is_server_running(name):
         raise typer.BadParameter(f"Server {name} is already running")
     
-    if serverService.start_server(name, workdir, entrypoint):
+    if server_service.start_server(name, workdir, entrypoint):
         typer.echo(f"Started server {name}")
     else:
         typer.echo("Could not start server")
@@ -60,7 +58,7 @@ def exec(
     """
     name = profile.name
     require_running(name)    
-    serverService.run_in_server(name, command)
+    server_service.run_in_server(name, command)
 
 
 @app.command()
@@ -73,7 +71,7 @@ def stop(
     name = profile.name
     require_running(name)
     typer.echo("Stopping server...")
-    if serverService.stop_server(name):
+    if server_service.stop_server(name):
         typer.echo(f"Stopped server {name}")
     else:
         typer.echo(f"Could not verify whether stop successful {name}")
@@ -88,7 +86,7 @@ def backup(
     Create a server backup based on the provided configuration.
     """
 
-    if serverService.is_server_running(profile.name):
+    if server_service.is_server_running(profile.name):
         raise typer.BadParameter("Cannot create backup of running server")
 
     backup_dir = Path(profile.backup_location)
