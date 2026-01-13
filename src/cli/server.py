@@ -26,8 +26,24 @@ class ProfileParser(ParamType):
 
 
 def require_running(name: str):
-    if not server_service.is_server_running(name):
+    result = server_service.is_server_running(name)
+    if result.is_error():
+        typer.echo(f"Could not verify server state: {result.error}")
+        raise typer.Abort()
+    
+    if result.unwrap() == False:
         raise typer.BadParameter(f"Server {name} is not running")
+    
+
+def require_stopped(name: str, message: str):
+    result = server_service.is_server_running(name)
+    if result.is_error():
+        typer.echo(f"Could not verify server state: {result.error}")
+        raise typer.Abort()
+
+    if result.unwrap() == True:
+        raise typer.BadParameter(message)
+
 
 @app.command()
 def start(
@@ -40,13 +56,14 @@ def start(
     workdir = profile.server_location
     entrypoint = profile.entrypoint
 
-    if server_service.is_server_running(name):
-        raise typer.BadParameter(f"Server {name} is already running")
+    require_stopped(name, f"Server {name} is already running")
     
-    if server_service.start_server(name, workdir, entrypoint):
+    result = server_service.start_server(name, workdir, entrypoint)
+    if result.is_success():
         typer.echo(f"Started server {name}")
     else:
-        typer.echo("Could not start server")
+        typer.echo(f"Could not start server: {result.error}")
+        raise typer.Abort()
 
 @app.command()
 def exec(
@@ -57,8 +74,11 @@ def exec(
     Try to execute the specified command in the server
     """
     name = profile.name
-    require_running(name)    
-    server_service.run_in_server(name, command)
+    require_running(name)
+    result = server_service.run_in_server(name, command)
+    if result.is_error():
+        typer.echo(f"Failed to execute command: {result.error}")
+        raise typer.Abort()
 
 
 @app.command()
@@ -71,10 +91,12 @@ def stop(
     name = profile.name
     require_running(name)
     typer.echo("Stopping server...")
-    if server_service.stop_server(name):
+    result = server_service.stop_server(name)
+    if result.is_success():
         typer.echo(f"Stopped server {name}")
     else:
-        typer.echo(f"Could not verify whether stop successful {name}")
+        typer.echo(f"Could not stop server: {result.error}")
+        raise typer.Abort()
 
 
 @app.command()
@@ -82,8 +104,12 @@ def list():
     """
     List the running servers by name and host.
     """
-    running_servers = server_service.list_running()
-    for server in running_servers:
+    result = server_service.list_running()
+    if result.is_error():
+        typer.echo(f"Failed to list running servers: {result.error}")
+        raise typer.Abort()
+    
+    for server in result.unwrap():
         typer.echo(f"* {server.name} : {server.host_location}") 
 
 
@@ -97,8 +123,7 @@ def backup(
     Create a server backup based on the provided configuration.
     """
 
-    if server_service.is_server_running(profile.name):
-        raise typer.BadParameter("Cannot create backup of running server")
+    require_stopped(profile.name, "Cannot create backup of running server")
 
     backup_dir = Path(profile.backup_location)
     dir_to_backup = Path(profile.server_location)
