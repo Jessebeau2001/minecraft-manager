@@ -127,8 +127,8 @@ def create(
         template_profile = Profile(
             name            = generated_name,
             server_location = app_dir.joinpath(f"servers/{generated_name}"),
-            backup_dir      = app_dir.joinpath(f"backups/{generated_name}"),
-            mc_version      = "minecraft",
+            backup_location      = app_dir.joinpath(f"backups/{generated_name}"),
+            server_version      = "minecraft",
             entrypoint      = DEFAULT_ENTRYPOINT
         )
     elif template:
@@ -143,8 +143,8 @@ def create(
         new_profile = Profile(
             name            = prompt_unique_name(name),
             server_location = prompt_dir("server directory", server_dir),
-            backup_dir      = prompt_dir("backup directory", backup_dir),
-            mc_version      = prompt_str("Minecraft version", mc_version),
+            backup_location      = prompt_dir("backup directory", backup_dir),
+            server_version      = prompt_str("Minecraft version", mc_version),
             entrypoint      = DEFAULT_ENTRYPOINT
         )
     else:
@@ -152,8 +152,8 @@ def create(
         new_profile = Profile(
             name            = resolve_value(template_profile.name, name, lambda value: prompt_str("name", value)),
             server_location = resolve_value(template_profile.server_location, server_dir, lambda value: prompt_dir("server directory", value)),
-            backup_dir      = resolve_value(template_profile.backup_dir, backup_dir, lambda value: prompt_dir("backup directory", value)),
-            mc_version      = fallback(template_profile.mc_version, mc_version),
+            backup_location      = resolve_value(template_profile.backup_location, backup_dir, lambda value: prompt_dir("backup directory", value)),
+            server_version      = fallback(template_profile.server_version, mc_version),
             entrypoint      = template_profile.entrypoint
         )
 
