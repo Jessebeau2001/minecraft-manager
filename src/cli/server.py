@@ -94,7 +94,7 @@ def list():
         typer.echo(f"Failed to list running servers: {result.error}")
         raise typer.Abort()
     
-    for server in result.value:
+    for server in result.unwrap():
         typer.echo(f"* {server.name} : {server.host_location}") 
 
 
