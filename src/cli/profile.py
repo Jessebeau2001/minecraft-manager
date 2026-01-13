@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from cli.config import profile_repository, console
 from click import ParamType
 from rich.table import Table
+from rich.text import Text
 
 
 app = typer.Typer()
@@ -131,10 +132,15 @@ def list(
 
     if not verbose:
         for info in list:
-            typer.echo(f"* {info.profile.name} [{info.location}]")
+            if info.profile != None:
+                typer.echo(f"* {info.profile.name} [{info.location}]")
+            else:
+                console.print(Text(f"* INVALID [{info.location}]", style="red"))
     else:
         for info in list:
-            table = profile_to_table(info.profile)
-            typer.echo(f"* {info.profile.name} [{info.location}]")
-            console.print(table)
-            
+            if info.profile != None:
+                table = profile_to_table(info.profile)
+                typer.echo(f"* {info.profile.name} [{info.location}]")
+                console.print(table)
+            else:
+                console.print(Text(f"* INVALID [{info.location}]", style="red"))

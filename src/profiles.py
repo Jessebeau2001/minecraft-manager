@@ -23,7 +23,10 @@ class Profile:
 @dataclass
 class ProfileInfo:
     location: str
-    profile: Profile
+    profile: Profile | None
+    
+    def is_valid(self) -> bool:
+        return self.profile != None
 
 
 class ProfileRepository(Protocol):
@@ -45,13 +48,15 @@ from pathlib import Path
 
 
 def try_safe_cast(data: Any) -> Profile | None:
+    if isinstance(data, Profile):
+        return data
     if not isinstance(data, dict):
         return None
     try:
         config_fields = {f.name for f in fields(Profile)}
         filtered_data: dict[str, Any] = {k: data[k] for k in config_fields if k in data}
         return Profile(**filtered_data)
-    except TypeError:
+    except (TypeError, ValueError):
         return None
     
 
@@ -66,40 +71,53 @@ class FileProfileRepository:
             raise RuntimeError(f"Path {path} is not a directory or does not exist")
 
 
-    def _get_path_for(self, name: str) -> Path:
+    def __sanitize_name(self, name: str) -> str:
+        return sanitize_filename(name)
+
+
+    def __local_path_for(self, name: str) -> Path:
         return self.storage_dir.joinpath(f"{name}.yml")
     
-
-    def _try_load(self, path: Path | str) -> Profile | None:
-        if isinstance(path, str):
-            path = self._get_path_for(path)
-
+    
+    def __try_load(self, path: Path) -> Profile | None:
         if not path.is_file():
             return None
-        
         try:
             read = path.read_text()
             parsed = yaml.safe_load(read)
             return try_safe_cast(parsed)
         except (yaml.YAMLError):
             return None
-        
 
+    
+    def __find_profile(self, query: str):
+        expected_path = self.__local_path_for(self.__sanitize_name(query))
+        
+        # Try expected location
+        current = self.__try_load(expected_path)
+        if current != None and current.name == query:
+            return current # Profile found in expected file
+        
+        # Fishing in the dark... 
+        # iter all yml files in profile dir, and check if any match the provided name
+        for path in self.storage_dir.glob("*.yml"):
+            current = self.__try_load(path)
+            if current != None and current.name == query:
+                return current # Profile found in different file
+            
+        return None # Profile not found
+
+        
     def load(self, name: str) -> Profile:
-        # TODO: This should search for the profile, not just load by name and call it a day
-        # Searching will entail:
-        # 1. Do any of the file names match our query
-        # 2. Does the name in the file also match the query - if yes return
-        # 3. else do an iterative search to check the name of every profile until found
-        loaded = self._try_load(name)
+        loaded = self.__find_profile(name)
         if loaded != None:
             return loaded
         else:
-            raise Exception()
+            raise Exception() # TODO: Actual ProfileNotFoundException
         
 
     def save(self, name: str, config: Profile) -> str:
-        generated_name = generate_profile_filename(name)
+        generated_name = self.__sanitize_name(name)
         path = self.storage_dir.joinpath(f"{generated_name}.yml")
         serialized = yaml.safe_dump(config.as_dict(), sort_keys=False)
 
@@ -111,11 +129,10 @@ class FileProfileRepository:
 
     def list(self) -> List[ProfileInfo]:
         return [
-            ProfileInfo(path.name, cfg)
+            ProfileInfo(path.name, self.__try_load(path))
             for path in self.storage_dir.glob("*.yml")
-            if (cfg := self._try_load(path)) is not None
         ]
 
 
     def exists(self, name: str) -> bool:
-        return self._try_load(name) != None
+        return self.__find_profile(name) != None
