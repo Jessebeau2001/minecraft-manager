@@ -1,3 +1,4 @@
+from profiles import Profile
 import yaml
 import typer
 from pathlib import Path
@@ -5,7 +6,6 @@ from typing import Annotated, Any
 from cli.config import profile_repository, console
 from click import ParamType
 from rich.table import Table
-from config.profile import Profile
 
 
 app = typer.Typer()

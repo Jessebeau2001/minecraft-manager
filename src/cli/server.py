@@ -2,7 +2,7 @@ import tarfile
 import typer
 from cli.config import profile_repository, server_service
 from typing import Annotated, Any, Iterator
-from config.profile import Profile
+from profiles import Profile
 from utils import generate_unique_path, sanitize_filename
 from pathlib import Path
 from datetime import datetime
@@ -75,6 +75,17 @@ def stop(
         typer.echo(f"Stopped server {name}")
     else:
         typer.echo(f"Could not verify whether stop successful {name}")
+
+
+@app.command()
+def active():
+    """
+    List the running servers by name and host.
+    """
+    running_servers = server_service.list_running()
+    for server in running_servers:
+        typer.echo(f"* {server.name} : {server.host_location}") 
+
 
 @app.command()
 def backup(

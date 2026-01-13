@@ -1,5 +1,5 @@
 from pathlib import Path
-from config.profile import FileProfileRepository, ProfileRepository
+from profiles import FileProfileRepository, ProfileRepository
 from rich.console import Console
 from host_service import create_os_host_service
 

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import platform
 import shutil
 import time
@@ -30,12 +31,16 @@ class ScreenService(ABC):
 
     def exists(self, name: str) -> bool:
         return name in self.list(trim_id=True)
+    
+    def trim_id(self, name: str) -> str:
+        return name.split(".")[1] if "." in name else name
 
 
 class LinuxScreenService(ScreenService):
     def _normalize_name(self, name: str) -> str:
         # Just use the filename algo
         return sanitize_filename(name)
+    
 
     def list(self, trim_id: bool = False) -> list[str]:
         result = run(["screen", "-ls"])
@@ -55,8 +60,8 @@ class LinuxScreenService(ScreenService):
                 continue
             parts = line.split()
             name = parts[0] # "12345.name"
-            if trim_id and "." in name:
-                name = name.split(".")[1] # ["12345", "name"]
+            if trim_id:     # "12345.name" -> "name"
+                name = self.trim_id(name)
             session_names.append(name)
         
         return session_names
@@ -90,6 +95,12 @@ class LinuxScreenService(ScreenService):
         return super().exists(self._normalize_name(name))
 
 
+@dataclass
+class HostDescriptor():
+    name: str
+    host_location: str
+
+
 class PlatformHostService(ABC):
     @abstractmethod
     def is_server_running(self, name: str) -> bool:
@@ -101,6 +112,10 @@ class PlatformHostService(ABC):
     
     @abstractmethod
     def stop_server(self, name: str) -> bool:
+        ...
+
+    @abstractmethod
+    def list_running(self) -> list[HostDescriptor]:
         ...
     
     @abstractmethod
@@ -136,6 +151,13 @@ class ScreenPlatformService(PlatformHostService):
         local_name = self._local_name(name)
         self._screen.stuff(local_name, "stop")
         return self._screen.wait_term(local_name, 1, 10)
+    
+    
+    def list_running(self) -> list[HostDescriptor]:
+        return [HostDescriptor(
+            self._screen.trim_id(session),
+            f"screen@{session}"
+        ) for session in self._screen.list()]
     
 
     def run_in_server(self, name: str, command: str):
