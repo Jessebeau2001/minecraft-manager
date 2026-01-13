@@ -98,14 +98,13 @@ class ScreenService(ABC):
         ...
 
     @abstractmethod
-    def create(self, name: str, command: str) -> Result[None]:
+    def create(self, name: str, command: str, workdir: str | None = None) -> Result[None]:
         """
         Creates a new screen session.
         
         Returns:
             Result with None on success, or error on failure.
         """
-        ...
 
     @abstractmethod
     def stuff(self, name: str, command: str) -> Result[None]:
@@ -177,8 +176,12 @@ class LinuxScreenService(ScreenService):
         return new_success(session_names)
 
 
-    def create(self, name: str, command: str) -> Result[None]:
+    def create(self, name: str, command: str, workdir: str | None = None) -> Result[None]:
         name = self._normalize_name(name)
+        if workdir != None:
+            # If workdir provided cd to it first
+            command = f"cd {workdir} && {command}"
+        
         args = ["screen", "-dmS", name, "bash", "-c", command]
 
         result = run(args)
@@ -290,8 +293,7 @@ class ScreenPlatformService(PlatformHostService):
 
     def start_server(self, name: str, workdir: str, entrypoint: str) -> Result[None]:
         local_name = self.__to_local_name(name)
-        cmd = f"cd {workdir} && {entrypoint}"  # In the wrong layer, this should not know about linux vs other OS
-        return self.__screen.create(local_name, cmd)
+        return self.__screen.create(local_name, entrypoint, workdir)
     
     
     def stop_server(self, name: str) -> Result[None]:
@@ -315,7 +317,7 @@ class ScreenPlatformService(PlatformHostService):
             HostDescriptor(
                 self.__strip_local_name(self.__screen.trim_id(session)),
                 f"screen@{session}"
-            ) for session in sessions_result.value  # type: ignore
+            ) for session in sessions_result.unwrap()
         ]
         return new_success(descriptors)
     
@@ -335,3 +337,11 @@ def create_os_host_service() -> PlatformHostService:
                 raise RuntimeError("System requirements not met, please install packages: [ screen ]")
         case _:
             raise RuntimeError(f"System {system} is not supported")
+
+
+#            __n__n__
+#     .------`-\00/-'
+#    /  ##  ## (oo)
+#   / \## __   ./
+#      |//YY \|/
+# arie |||   |||

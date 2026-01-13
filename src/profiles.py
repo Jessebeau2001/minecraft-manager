@@ -20,11 +20,11 @@ def parse_path(path: str | None) -> Path:
 class Profile(BaseModel):
     name: str
     server_location: Annotated[Path, AfterValidator(parse_path)]
-    backup_dir: Annotated[Path, AfterValidator(parse_path)]
-    mc_version: str
+    backup_location: Annotated[Path, AfterValidator(parse_path)]
+    server_version: str
     entrypoint: str
     
-    
+
     def as_dict(self) -> dict[str, Any]:
         # json mode normalizes values to primitive types
         # e.g. Path -> str
