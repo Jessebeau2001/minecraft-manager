@@ -1,23 +1,72 @@
-from typing import Any, NamedTuple, Protocol, List
-from dataclasses import asdict, dataclass, fields
-
+from abc import ABC
+from pydantic import AfterValidator, BaseModel, ValidationError
+import yaml
+from typing import Annotated, Any, Callable, List
+from pathlib import Path
+from dataclasses import dataclass, fields
+from pathlib import Path
 from utils import sanitize_filename
 
-class Options(NamedTuple):
-    config_dir: str
 
-options = Options('./tmp/configs')
+def parse_path(path: str | None) -> Path:
+    if path is None:
+        raise ValueError("path cannot be None")
+    try:
+        return Path(path).expanduser().resolve()
+    except Exception:
+        raise ValueError(f"path {path} cannot resolved")
 
-@dataclass
-class Profile:
+
+class Profile(BaseModel):
     name: str
-    server_location: str
-    server_version: str
-    backup_location: str
+    server_location: Annotated[Path, AfterValidator(parse_path)]
+    backup_dir: Annotated[Path, AfterValidator(parse_path)]
+    mc_version: str
     entrypoint: str
-
+    
+    
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # json mode normalizes values to primitive types
+        # e.g. Path -> str
+        return self.model_dump(mode="json")
+    
+
+class TypeNotSupportedError(Exception):
+    def __init__(self, name: str):
+        super().__init__(f"Unsupported type {name}")
+
+
+class ParseError(Exception):
+    def __init__(self):
+        super().__init__("Cannot parse data")
+
+
+class DynamicParser:
+    Parser = Callable[[str], dict[str, Any]]
+
+    __parsers: dict[str, Parser] = {
+        "yml": yaml.safe_load,
+        "yaml": yaml.safe_load,
+    }
+
+    def __get_parser(self, typename: str) -> Parser:
+        parser = self.__parsers.get(typename)
+        if parser is None:
+            raise TypeNotSupportedError(typename)
+        return parser
+            
+
+    def supports(self, typename: str) -> bool:
+        return typename in self.__parsers
+
+
+    def parse(self, typename: str, data: str) -> dict[str, Any]:
+        parser = self.__get_parser(typename)
+        try:
+            return parser(data)
+        except Exception as e:
+            raise ParseError() from e
+
 
 
 @dataclass
@@ -29,7 +78,7 @@ class ProfileInfo:
         return self.profile != None
 
 
-class ProfileRepository(Protocol):
+class ProfileRepository(ABC):
     def load(self, name: str) -> Profile:
         ...
 
@@ -41,10 +90,11 @@ class ProfileRepository(Protocol):
 
     def exists(self, name: str) -> bool:
         ...
-    
 
-import yaml
-from pathlib import Path
+
+class ProfileNotFoundError(Exception):
+    def __init__(self, name: str):
+        super().__init__(f"Profile {name} does not exist")
 
 
 def try_safe_cast(data: Any) -> Profile | None:
@@ -58,25 +108,25 @@ def try_safe_cast(data: Any) -> Profile | None:
         return Profile(**filtered_data)
     except (TypeError, ValueError):
         return None
-    
-
-def generate_profile_filename(name: str) -> str:
-    return sanitize_filename(name)
 
 
-class FileProfileRepository:
+class FileProfileRepository(ProfileRepository):
+    __storage_dir: Path
+    __parser: DynamicParser
+
     def __init__(self, path: Path):
-        self.storage_dir = Path(path)
         if not path.exists() or not path.is_dir():
             raise RuntimeError(f"Path {path} is not a directory or does not exist")
+        self.__storage_dir = Path(path)
+        self.__parser = DynamicParser()
 
 
-    def __sanitize_name(self, name: str) -> str:
+    def __scoped_name(self, name: str) -> str:
         return sanitize_filename(name)
 
 
-    def __local_path_for(self, name: str) -> Path:
-        return self.storage_dir.joinpath(f"{name}.yml")
+    def __scoped_path(self, name: str) -> Path:
+        return self.__storage_dir.joinpath(f"{name}.yml")
     
     
     def __try_load(self, path: Path) -> Profile | None:
@@ -84,14 +134,18 @@ class FileProfileRepository:
             return None
         try:
             read = path.read_text()
-            parsed = yaml.safe_load(read)
-            return try_safe_cast(parsed)
-        except (yaml.YAMLError):
-            return None
+            parsed = self.__parser.parse("yml", read)
+            return Profile(**parsed)
+        except TypeNotSupportedError:
+            return None # Don't swallow this
+        except ParseError:
+            return None # Don't swallow this
+        except ValidationError:
+            return None # Don't swallow this
 
     
     def __find_profile(self, query: str):
-        expected_path = self.__local_path_for(self.__sanitize_name(query))
+        expected_path = self.__scoped_path(self.__scoped_name(query))
         
         # Try expected location
         current = self.__try_load(expected_path)
@@ -100,7 +154,7 @@ class FileProfileRepository:
         
         # Fishing in the dark... 
         # iter all yml files in profile dir, and check if any match the provided name
-        for path in self.storage_dir.glob("*.yml"):
+        for path in self.__storage_dir.glob("*.yml"):
             current = self.__try_load(path)
             if current != None and current.name == query:
                 return current # Profile found in different file
@@ -113,12 +167,12 @@ class FileProfileRepository:
         if loaded != None:
             return loaded
         else:
-            raise Exception() # TODO: Actual ProfileNotFoundException
+            raise ProfileNotFoundError(name)
         
 
     def save(self, name: str, config: Profile) -> str:
-        generated_name = self.__sanitize_name(name)
-        path = self.storage_dir.joinpath(f"{generated_name}.yml")
+        name = self.__scoped_name(name)
+        path = self.__storage_dir.joinpath(f"{name}.yml")
         serialized = yaml.safe_dump(config.as_dict(), sort_keys=False)
 
         with open(path, 'w+') as file:
@@ -130,7 +184,7 @@ class FileProfileRepository:
     def list(self) -> List[ProfileInfo]:
         return [
             ProfileInfo(path.name, self.__try_load(path))
-            for path in self.storage_dir.glob("*.yml")
+            for path in self.__storage_dir.glob("*.yml")
         ]
 
 

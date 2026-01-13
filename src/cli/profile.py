@@ -1,12 +1,13 @@
-from profiles import Profile
+from profiles import Profile, ProfileNotFoundError
 import yaml
 import typer
 from pathlib import Path
-from typing import Annotated, Any
-from cli.config import profile_repository, console
+from typing import Annotated, Any, Final
+from cli.config import get_app_dir, profile_repository, console
 from click import ParamType
 from rich.table import Table
 from rich.text import Text
+from utils import fallback, random_craft_name, resolve_value
 
 
 app = typer.Typer()
@@ -82,31 +83,80 @@ def prompt_str(name: str, value: str | None) -> str:
         return str(typer.prompt(f"Enter the {name}"))
     return value
 
-    
+
+def generate_unique_random_name() -> str:
+    generated = random_craft_name()
+    while profile_repository.exists(generated):
+        generated = random_craft_name()
+    return generated
+
+
+def make_unique(basename: str) -> str:
+    generated = basename
+    suffix = 1
+    while profile_repository.exists(generated):
+        generated = f"{basename}-{suffix}"
+        suffix += 1
+    return generated
+
+
+DEFAULT_ENTRYPOINT: Final[str] = "java -jar server.jar nogui"
+
 @app.command()
 def create(
-    name: Annotated[str | None, typer.Option(help="The name of the profile")] = None,
-    server_dir: Annotated[str | None, typer.Option(help="The location of the server")] = None,
-    mc_version: Annotated[str | None, typer.Option(help="The version of minecraft e.g. [1.20.4/fabric]")] = None,
-    backup_dir: Annotated[str | None, typer.Option(help="The location to store server backups in")] = None,
+    name: Annotated[str | None, typer.Option(help="The name of the profile.")] = None,
+    server_dir: Annotated[str | None, typer.Option(help="The location of the server.")] = None,
+    backup_dir: Annotated[str | None, typer.Option(help="The location to store server backups in.")] = None,
+    mc_version: Annotated[str | None, typer.Option(help="The version of minecraft e.g. 1.20.4-fabric")] = None,
+
+    template: Annotated[str | None, typer.Option(help="Create a profile by using another profile as template.")] = None,
+    defaults: Annotated[bool, typer.Option("--defaults", help="Use the default values for omitted profile configurations.")] = False
 ):
     """
-    Create a new profile explicitly or interactively.
+    Create a new profile explicitly, interactively or via template.
     """
 
-    # I dislike Typers implicit prompt system for this. Doing it manually gives us way more control
-    name = prompt_unique_name(name)
-    server_path = prompt_dir("server directory", server_dir)
-    version = prompt_str("Minecraft version", mc_version)
-    backup_path = prompt_dir("backup directory", backup_dir)
+    if defaults and template:
+        raise typer.BadParameter("Cannot use defaults with templates")
 
-    new_profile = Profile(
-        name,
-        str(server_path),
-        version,
-        str(backup_path),
-        "java -jar server.jar"
-    )
+    template_profile = None
+
+    if defaults:
+        generated_name = generate_unique_random_name()
+        app_dir = get_app_dir()
+        template_profile = Profile(
+            name            = generated_name,
+            server_location = app_dir.joinpath(f"servers/{generated_name}"),
+            backup_dir      = app_dir.joinpath(f"backups/{generated_name}"),
+            mc_version      = "minecraft",
+            entrypoint      = DEFAULT_ENTRYPOINT
+        )
+    elif template:
+        try:
+            template_profile = profile_repository.load(template)
+            template_profile.name = make_unique(template_profile.name)
+        except ProfileNotFoundError:
+            raise typer.BadParameter(f"Profile template {template} does not exist")
+    
+    if template_profile == None:
+        # Query-validate all
+        new_profile = Profile(
+            name            = prompt_unique_name(name),
+            server_location = prompt_dir("server directory", server_dir),
+            backup_dir      = prompt_dir("backup directory", backup_dir),
+            mc_version      = prompt_str("Minecraft version", mc_version),
+            entrypoint      = DEFAULT_ENTRYPOINT
+        )
+    else:
+        # Query-validate what is given
+        new_profile = Profile(
+            name            = resolve_value(template_profile.name, name, lambda value: prompt_str("name", value)),
+            server_location = resolve_value(template_profile.server_location, server_dir, lambda value: prompt_dir("server directory", value)),
+            backup_dir      = resolve_value(template_profile.backup_dir, backup_dir, lambda value: prompt_dir("backup directory", value)),
+            mc_version      = fallback(template_profile.mc_version, mc_version),
+            entrypoint      = template_profile.entrypoint
+        )
+
 
     console.print("Creating the following profile:")
     console.print(profile_to_table(new_profile))

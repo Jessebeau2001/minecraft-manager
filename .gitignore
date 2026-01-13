@@ -4,6 +4,9 @@
 ### Project ###
 **/tmp/**
 **/temp/**
+/profiles
+/servers
+/backups
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

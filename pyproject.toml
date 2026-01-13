@@ -10,8 +10,10 @@ python = "^3.10"
 typer = "^0.21.1"
 PyYAML = "^6.0.3"
 rich = "^14.2.0"
+pydantic = "^2.12.5"
 
 [tool.poetry.dev-dependencies]
+pytest = "^9.0.2"
 
 [tool.poetry.scripts]
 mcm = "cli.main:app"
@@ -19,3 +21,6 @@ mcm = "cli.main:app"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = [ "tests" ]
