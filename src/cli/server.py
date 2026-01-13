@@ -26,8 +26,24 @@ class ProfileParser(ParamType):
 
 
 def require_running(name: str):
-    if not server_service.is_server_running(name):
+    result = server_service.is_server_running(name)
+    if result.is_error():
+        typer.echo(f"Could not verify server state: {result.error}")
+        raise typer.Abort()
+    
+    if result.unwrap() == False:
         raise typer.BadParameter(f"Server {name} is not running")
+    
+
+def require_stopped(name: str, message: str):
+    result = server_service.is_server_running(name)
+    if result.is_error():
+        typer.echo(f"Could not verify server state: {result.error}")
+        raise typer.Abort()
+
+    if result.unwrap() == True:
+        raise typer.BadParameter(message)
+
 
 @app.command()
 def start(
@@ -40,8 +56,7 @@ def start(
     workdir = profile.server_location
     entrypoint = profile.entrypoint
 
-    if server_service.is_server_running(name):
-        raise typer.BadParameter(f"Server {name} is already running")
+    require_stopped(name, f"Server {name} is already running")
     
     result = server_service.start_server(name, workdir, entrypoint)
     if result.is_success():
@@ -108,8 +123,7 @@ def backup(
     Create a server backup based on the provided configuration.
     """
 
-    if server_service.is_server_running(profile.name):
-        raise typer.BadParameter("Cannot create backup of running server")
+    require_stopped(profile.name, "Cannot create backup of running server")
 
     backup_dir = Path(profile.backup_location)
     dir_to_backup = Path(profile.server_location)

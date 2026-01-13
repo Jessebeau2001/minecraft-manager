@@ -126,12 +126,12 @@ class ScreenService(ABC):
         """
         ...
 
-    def exists(self, name: str) -> bool:
+    def exists(self, name: str) -> Result[bool]:
         """Checks if a screen session exists."""
         result = self.list(trim_id=True)
         if result.is_error():
-            raise RuntimeError() # TODO: Proper handle
-        return name in result.unwrap()
+            return result # type: ignore
+        return new_success(name in result.unwrap())
     
     def trim_id(self, name: str) -> str:
         """Trims the process ID from a screen session name."""
@@ -148,10 +148,12 @@ class LinuxScreenService(ScreenService):
         result = run(["screen", "-ls"])
         lines = result.stdout.splitlines()
 
-        if result.returncode != 0: # is a successful execution, 1 everything else
+        if result.returncode != 0:
+            if "no sockets found" in result.stdout.lower():
+                return new_success([])
             return new_failure(OperationError(
                 error_type=OperationErrorType.COMMAND_FAILED,
-                message="Failed to list screen sessions",
+                message=result.stdout,
                 return_code=result.returncode,
                 stderr=result.stderr,
                 stdout=result.stdout
@@ -235,7 +237,7 @@ class HostDescriptor():
 
 class PlatformHostService(ABC):
     @abstractmethod
-    def is_server_running(self, name: str) -> bool:
+    def is_server_running(self, name: str) -> Result[bool]:
         ...
     
     @abstractmethod
@@ -286,7 +288,7 @@ class ScreenPlatformService(PlatformHostService):
         return new_success(local_sessions)
     
 
-    def is_server_running(self, name: str) -> bool:
+    def is_server_running(self, name: str) -> Result[bool]:
         local_name = self.__to_local_name(name)
         return self.__screen.exists(local_name)
 
